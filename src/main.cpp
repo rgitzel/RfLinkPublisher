@@ -1,19 +1,53 @@
 #include <Arduino.h>
 
-
-// https://circuits4you.com/2018/12/31/esp32-hardware-serial2-example/
-#define RXD2 16
-#define TXD2 17
-
-#define LED_PIN 2
+#include <WiFi.h>
+ 
 
 
 HardwareSerial monitor = Serial;
 HardwareSerial rflink = Serial2;
 
 
+// https://circuits4you.com/2018/12/31/esp32-hardware-monitor2-example/
+#define RXD2 16
+#define TXD2 17
+
+#define LED_PIN 2
+
+const char* ssid = "KOBEAR-2G";
+const char* password = "wookie4701";
+ 
+
 void setup() {
   monitor.begin(9600);
+
+  monitor.printf("Establishing connection to %s", ssid);
+
+  // took a long time to find that this is critical for the ESP32
+  WiFi.setSleep(false);
+
+  int n = WiFi.scanNetworks();
+  monitor.print(n);
+  monitor.println(" networks found");
+  for(int i = 0; i < n; i++)
+  {
+    monitor.println(WiFi.SSID(i));
+  }
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    monitor.print(".");
+    delay(500);
+  }
+  monitor.println();
+
+  monitor.print("Connected as ");
+  monitor.print(WiFi.localIP());
+  monitor.println();
+
+
 
   rflink.begin(57600, SERIAL_8N1, RXD2, TXD2);
 
