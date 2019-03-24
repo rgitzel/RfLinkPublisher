@@ -2,6 +2,8 @@
 
 #include <WiFi.h>
  
+#include <PubSubClient.h>
+
 
 
 HardwareSerial monitor = Serial;
@@ -17,6 +19,11 @@ HardwareSerial rflink = Serial2;
 const char* ssid = "KOBEAR-2G";
 const char* password = "wookie4701";
  
+const char* mqttServer = "192.168.0.13";
+const int mqttPort = 1883;
+
+WiFiClient espClient;
+PubSubClient client(espClient);
 
 void setup() {
   monitor.begin(9600);
@@ -24,6 +31,7 @@ void setup() {
   monitor.printf("Establishing connection to %s", ssid);
 
   // took a long time to find that this is critical for the ESP32
+
   WiFi.setSleep(false);
 
   int n = WiFi.scanNetworks();
@@ -47,6 +55,20 @@ void setup() {
   monitor.print(WiFi.localIP());
   monitor.println();
 
+
+  client.setServer(mqttServer, mqttPort);
+  while (!client.connected()) {
+    monitor.println("ESP > Connecting to MQTT...");
+ 
+    if (client.connect("foo")) {
+      monitor.println("connected to MQTT server");
+    } else {
+      monitor.print("ERROR > failed with state ");
+      monitor.print(client.state());
+      delay(2000);
+ 
+    }
+  }
 
 
   rflink.begin(57600, SERIAL_8N1, RXD2, TXD2);
@@ -83,9 +105,14 @@ void loop() {
     if(strtok(buffer, ";") && strtok(NULL, ";"))
     {
       char *token;
+      char buffer[100];
+
+      String json = "";
+
       if((token = strtok(NULL, ";")))
       {
-        monitor.printf("{ \"device\": \"%s\"", token);
+        sprintf(buffer, "{ \"device\": \"%s\"", token);
+        json += buffer;
 
         int numPairs = 0;
   
@@ -100,11 +127,15 @@ void loop() {
           char *value = strtok(NULL, "=");
           if(name && value)
           {
-            monitor.printf(", \"%s\": \"%s\"", name, value);
+            sprintf(buffer, ", \"%s\": \"%s\"", name, value);
+            json += buffer;
           }
         }
-        monitor.printf(" }");
-        monitor.printf("\n");
+
+        json += " }";
+
+        monitor.println(json.c_str());
+        monitor.println(client.publish("test/rflink", json.c_str()));
       }
     }
     
