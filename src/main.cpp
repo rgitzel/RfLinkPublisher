@@ -57,18 +57,6 @@ void setup() {
 
 
   client.setServer(mqttServer, mqttPort);
-  while (!client.connected()) {
-    monitor.println("ESP > Connecting to MQTT...");
- 
-    if (client.connect("foo")) {
-      monitor.println("connected to MQTT server");
-    } else {
-      monitor.print("ERROR > failed with state ");
-      monitor.print(client.state());
-      delay(2000);
- 
-    }
-  }
 
 
   rflink.begin(57600, SERIAL_8N1, RXD2, TXD2);
@@ -104,14 +92,15 @@ void loop() {
     // skip the first two (they're just counters)
     if(strtok(buffer, ";") && strtok(NULL, ";"))
     {
+      char *device;
       char *token;
       char buffer[100];
 
       String json = "";
 
-      if((token = strtok(NULL, ";")))
+      if((device = strtok(NULL, ";")))
       {
-        sprintf(buffer, "{ \"device\": \"%s\"", token);
+        sprintf(buffer, "{ \"device\": \"%s\"", device);
         json += buffer;
 
         int numPairs = 0;
@@ -135,7 +124,30 @@ void loop() {
         json += " }";
 
         monitor.println(json.c_str());
-        monitor.println(client.publish("test/rflink", json.c_str()));
+
+        while (!client.connected()) {
+          monitor.println("ESP > Connecting to MQTT...");
+      
+          if (client.connect("foo")) {
+            monitor.println("connected to MQTT server");
+          } else {
+            monitor.print("ERROR > failed with state ");
+            monitor.print(client.state());
+            delay(2000);
+      
+          }
+        }
+
+        char topic[100];
+        sprintf(topic, "rflink/%s", device);
+        if(monitor.println(client.publish(topic, json.c_str())))
+        {
+          monitor.println("successfully published to MQTT server");
+        }
+        else 
+        {
+          monitor.println("failed to publish to MQTT server");
+        }
       }
     }
     
