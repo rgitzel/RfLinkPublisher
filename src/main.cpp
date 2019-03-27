@@ -1,18 +1,19 @@
 #include <Arduino.h>
 
-#include <WiFi.h>
+//#include <WiFi.h>
+#include <ESP8266WiFi.h>
  
 #include <PubSubClient.h>
 
 
 
-HardwareSerial monitor = Serial;
-HardwareSerial rflink = Serial2;
+HardwareSerial monitor = Serial1;
+HardwareSerial rflink = Serial;
 
 
 // https://circuits4you.com/2018/12/31/esp32-hardware-monitor2-example/
-#define RXD2 16
-#define TXD2 17
+// #define RXD2 16
+// #define TXD2 17
 
 #define LED_PIN 2
 
@@ -23,7 +24,6 @@ const char* mqttServer = "192.168.0.13";
 const int mqttPort = 1883;
 
 WiFiClient espClient;
-PubSubClient client(espClient);
 
 void setup() {
   monitor.begin(9600);
@@ -31,8 +31,7 @@ void setup() {
   monitor.printf("Establishing connection to %s", ssid);
 
   // took a long time to find that this is critical for the ESP32
-
-  WiFi.setSleep(false);
+  //WiFi.setSleep(false);
 
   int n = WiFi.scanNetworks();
   monitor.print(n);
@@ -42,8 +41,8 @@ void setup() {
     monitor.println(WiFi.SSID(i));
   }
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
+  // WiFi.mode(WIFI_STA);
+  // WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
     monitor.print(".");
@@ -56,10 +55,12 @@ void setup() {
   monitor.println();
 
 
-  client.setServer(mqttServer, mqttPort);
+  // client.setServer(mqttServer, mqttPort);
 
-
-  rflink.begin(57600, SERIAL_8N1, RXD2, TXD2);
+  // ESP32
+  // rflink.begin(57600, SERIAL_8N12, RXD2, TXD2);
+  // ESP8266
+  // rflink.begin(57600, SERIAL_8N1);
 
   pinMode (LED_PIN, OUTPUT);
   digitalWrite (LED_PIN, LOW);
@@ -74,90 +75,63 @@ char buffer[128];
 
 void loop() {
 
-  char next;
-  int numCharsRead = 0;
-  while((rflink.available() > 0) && ((next = char(rflink.read())) != '\n') && (numCharsRead < 128))
-  {
-    buffer[numCharsRead++] = next;
-    delay(1);
-  }
-  buffer[numCharsRead] = '\0';
+  // char next;
+  // int numCharsRead = 0;
+  // while((rflink.available() > 0) && ((next = char(rflink.read())) != '\n') && (numCharsRead < 128))
+  // {
+  //   buffer[numCharsRead++] = next;
+  //   delay(1);
+  // }
+  // buffer[numCharsRead] = '\0';
 
-  if(numCharsRead > 0)
-  {
-    monitor.print('\n');
-    monitor.print(buffer);
-    monitor.print('\n');
+  // if(numCharsRead > 0)
+  // {
+  //   monitor.print('\n');
+  //   monitor.print(buffer);
+  //   monitor.print('\n');
 
-    // skip the first two (they're just counters)
-    if(strtok(buffer, ";") && strtok(NULL, ";"))
-    {
-      char *device;
-      char *token;
-      char buffer[100];
+  //   // skip the first two (they're just counters)
+  //   if(strtok(buffer, ";") && strtok(NULL, ";"))
+  //   {
+  //     char *device;
+  //     char *token;
+  //     char buffer[100];
 
-      String json = "";
+  //     String json = "";
 
-      if((device = strtok(NULL, ";")))
-      {
-        sprintf(buffer, "{ \"device\": \"%s\"", device);
-        json += buffer;
+  //     if((device = strtok(NULL, ";")))
+  //     {
+  //       sprintf(buffer, "{ \"device\": \"%s\"", device);
+  //       json += buffer;
 
-        int numPairs = 0;
+  //       int numPairs = 0;
   
-        while((token = strtok(NULL, ";")) && (numPairs < MAX_VALUES))
-        {
-          nameValuePairs[numPairs++] = token;
-        }
+  //       while((token = strtok(NULL, ";")) && (numPairs < MAX_VALUES))
+  //       {
+  //         nameValuePairs[numPairs++] = token;
+  //       }
 
-        for(int i = 0 ; i < numPairs; i++)
-        {
-          char *name = strtok(nameValuePairs[i], "=");
-          char *value = strtok(NULL, "=");
-          if(name && value)
-          {
-            sprintf(buffer, ", \"%s\": \"%s\"", name, value);
-            json += buffer;
-          }
-        }
+  //       for(int i = 0 ; i < numPairs; i++)
+  //       {
+  //         char *name = strtok(nameValuePairs[i], "=");
+  //         char *value = strtok(NULL, "=");
+  //         if(name && value)
+  //         {
+  //           sprintf(buffer, ", \"%s\": \"%s\"", name, value);
+  //           json += buffer;
+  //         }
+  //       }
 
-        json += " }";
+  //       json += " }";
 
-        monitor.println(json.c_str());
-
-        while (!client.connected()) {
-          monitor.println("ESP > Connecting to MQTT...");
-      
-          if (client.connect("foo")) {
-            monitor.println("connected to MQTT server");
-          } else {
-            monitor.print("ERROR > failed with state ");
-            monitor.print(client.state());
-            delay(2000);
-      
-          }
-        }
-
-        char topic[100];
-        sprintf(topic, "rflink/%s", device);
-        if(monitor.println(client.publish(topic, json.c_str())))
-        {
-          monitor.println("successfully published to MQTT server");
-        }
-        else 
-        {
-          monitor.println("failed to publish to MQTT server");
-        }
-      }
-    }
+  //       monitor.println(json.c_str());
+  //       }
+  //     }
+  //   }
     
     digitalWrite (LED_PIN, HIGH);
     delay(300);
     digitalWrite (LED_PIN, LOW);
-  }
-  else {
-    delay(300);
-  }
 
   delay(700);
   monitor.print(".");
