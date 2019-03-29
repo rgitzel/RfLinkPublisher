@@ -1,17 +1,16 @@
 #include <Arduino.h>
 
-//#include <WiFi.h>
-#include <ESP8266WiFi.h>
- 
-#include <PubSubClient.h>
+#include <SoftwareSerial.h>
+
+
+// #define RFLINK 
+
+SoftwareSerial debug(-1, D1);
+// HardwareSerial rflink = Serial;
 
 
 
-HardwareSerial monitor = Serial1;
-HardwareSerial rflink = Serial;
-
-
-// https://circuits4you.com/2018/12/31/esp32-hardware-monitor2-example/
+// https://circuits4you.com/2018/12/31/esp32-hardware-debug2-example/
 // #define RXD2 16
 // #define TXD2 17
 
@@ -23,44 +22,18 @@ const char* password = "wookie4701";
 const char* mqttServer = "192.168.0.13";
 const int mqttPort = 1883;
 
-WiFiClient espClient;
 
 void setup() {
-  monitor.begin(9600);
+  debug.begin(9600);
 
-  monitor.printf("Establishing connection to %s", ssid);
-
-  // took a long time to find that this is critical for the ESP32
-  //WiFi.setSleep(false);
-
-  int n = WiFi.scanNetworks();
-  monitor.print(n);
-  monitor.println(" networks found");
-  for(int i = 0; i < n; i++)
-  {
-    monitor.println(WiFi.SSID(i));
-  }
-
-  // WiFi.mode(WIFI_STA);
-  // WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    monitor.print(".");
-    delay(500);
-  }
-  monitor.println();
-
-  monitor.print("Connected as ");
-  monitor.print(WiFi.localIP());
-  monitor.println();
-
-
-  // client.setServer(mqttServer, mqttPort);
-
+  debug.println("starting...");
+  
+#ifdef RFLINK
   // ESP32
   // rflink.begin(57600, SERIAL_8N12, RXD2, TXD2);
   // ESP8266
-  // rflink.begin(57600, SERIAL_8N1);
+  rflink.begin(57600, SERIAL_8N1);
+#endif
 
   pinMode (LED_PIN, OUTPUT);
   digitalWrite (LED_PIN, LOW);
@@ -72,67 +45,72 @@ const int MAX_VALUES = 10;
 char *nameValuePairs[MAX_VALUES];
 
 char buffer[128];
+int i = 0;
 
 void loop() {
+#ifdef RFLINK
+  char next;
+  int numCharsRead = 0;
+  while((rflink.available() > 0) && ((next = char(rflink.read())) != '\n') && (numCharsRead < 128))
+  {
+    buffer[numCharsRead++] = next;
+    delay(1);
+  }
+  buffer[numCharsRead] = '\0';
 
-  // char next;
-  // int numCharsRead = 0;
-  // while((rflink.available() > 0) && ((next = char(rflink.read())) != '\n') && (numCharsRead < 128))
-  // {
-  //   buffer[numCharsRead++] = next;
-  //   delay(1);
-  // }
-  // buffer[numCharsRead] = '\0';
+  if(numCharsRead > 0)
+  {
+    debug.print('\n');
+    debug.print(buffer);
+    debug.print('\n');
 
-  // if(numCharsRead > 0)
-  // {
-  //   monitor.print('\n');
-  //   monitor.print(buffer);
-  //   monitor.print('\n');
+    // skip the first two (they're just counters)
+    if(strtok(buffer, ";") && strtok(NULL, ";"))
+    {
+      char *device;
+      char *token;
+      char buffer[100];
 
-  //   // skip the first two (they're just counters)
-  //   if(strtok(buffer, ";") && strtok(NULL, ";"))
-  //   {
-  //     char *device;
-  //     char *token;
-  //     char buffer[100];
+      String json = "";
 
-  //     String json = "";
+      if((device = strtok(NULL, ";")))
+      {
+        sprintf(buffer, "{ \"device\": \"%s\"", device);
+        json += buffer;
 
-  //     if((device = strtok(NULL, ";")))
-  //     {
-  //       sprintf(buffer, "{ \"device\": \"%s\"", device);
-  //       json += buffer;
-
-  //       int numPairs = 0;
+        int numPairs = 0;
   
-  //       while((token = strtok(NULL, ";")) && (numPairs < MAX_VALUES))
-  //       {
-  //         nameValuePairs[numPairs++] = token;
-  //       }
+        while((token = strtok(NULL, ";")) && (numPairs < MAX_VALUES))
+        {
+          nameValuePairs[numPairs++] = token;
+        }
 
-  //       for(int i = 0 ; i < numPairs; i++)
-  //       {
-  //         char *name = strtok(nameValuePairs[i], "=");
-  //         char *value = strtok(NULL, "=");
-  //         if(name && value)
-  //         {
-  //           sprintf(buffer, ", \"%s\": \"%s\"", name, value);
-  //           json += buffer;
-  //         }
-  //       }
+        for(int i = 0 ; i < numPairs; i++)
+        {
+          char *name = strtok(nameValuePairs[i], "=");
+          char *value = strtok(NULL, "=");
+          if(name && value)
+          {
+            sprintf(buffer, ", \"%s\": \"%s\"", name, value);
+            json += buffer;
+          }
+        }
 
-  //       json += " }";
+        json += " }";
 
-  //       monitor.println(json.c_str());
-  //       }
-  //     }
-  //   }
-    
-    digitalWrite (LED_PIN, HIGH);
-    delay(300);
-    digitalWrite (LED_PIN, LOW);
+        digitalWrite (LED_PIN, LOW);
+        delay(300);
+        digitalWrite (LED_PIN, HIGH);
+        debug.println(json.c_str());
+      }
+    }
+  }
+#endif
 
+  digitalWrite (LED_PIN, HIGH);
   delay(700);
-  monitor.print(".");
+  digitalWrite (LED_PIN, LOW);
+  delay(1300);
+
+  debug.println(i++);
 }
