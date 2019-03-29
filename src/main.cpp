@@ -3,10 +3,10 @@
 #include <SoftwareSerial.h>
 
 
-// #define RFLINK 
+#define RFLINK 
 
 SoftwareSerial debug(-1, D1);
-// HardwareSerial rflink = Serial;
+HardwareSerial rflink = Serial;
 
 
 
@@ -33,6 +33,7 @@ void setup() {
   // rflink.begin(57600, SERIAL_8N12, RXD2, TXD2);
   // ESP8266
   rflink.begin(57600, SERIAL_8N1);
+  rflink.swap();
 #endif
 
   pinMode (LED_PIN, OUTPUT);
@@ -98,9 +99,6 @@ void loop() {
 
         json += " }";
 
-        digitalWrite (LED_PIN, LOW);
-        delay(300);
-        digitalWrite (LED_PIN, HIGH);
         debug.println(json.c_str());
       }
     }
