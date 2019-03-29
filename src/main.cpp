@@ -1,18 +1,28 @@
-#include <Arduino.h>
-
-#include <SoftwareSerial.h>
-
 
 #define RFLINK 
 
+#ifdef NODEMCU
+#include <Arduino.h>
+#include <SoftwareSerial.h>
 SoftwareSerial debug(-1, D1);
+#endif
+
+#ifdef ESP01
+#include <Arduino.h>
+HardwareSerial debug = Serial1;
+#endif
+
+#ifdef ESP32
+// https://circuits4you.com/2018/12/31/esp32-hardware-debug2-example/
+#define RXD2 16
+#define TXD2 17
+HardwareSerial debug = Serial2;
+#endif
+
+
 HardwareSerial rflink = Serial;
 
 
-
-// https://circuits4you.com/2018/12/31/esp32-hardware-debug2-example/
-// #define RXD2 16
-// #define TXD2 17
 
 #define LED_PIN 2
 
@@ -29,11 +39,12 @@ void setup() {
   debug.println("starting...");
   
 #ifdef RFLINK
-  // ESP32
-  // rflink.begin(57600, SERIAL_8N12, RXD2, TXD2);
-  // ESP8266
-  rflink.begin(57600, SERIAL_8N1);
-  rflink.swap();
+  #ifdef ESP32
+    rflink.begin(57600, SERIAL_8N12, RXD2, TXD2);
+  #else
+    rflink.begin(57600, SERIAL_8N1);
+    rflink.swap();
+  #endif
 #endif
 
   pinMode (LED_PIN, OUTPUT);
@@ -42,17 +53,22 @@ void setup() {
 
 
 
-const int MAX_VALUES = 10;
-char *nameValuePairs[MAX_VALUES];
+const int MAX_VALUES_IN_RFLINK_MESSAGE = 10;
+const int MAX_LENGTH_OF_RFLINK_MESSAGE = 128;
 
-char buffer[128];
-int i = 0;
 
-void loop() {
-#ifdef RFLINK
+void poll_rflink() {
+  char *nameValuePairs[MAX_VALUES_IN_RFLINK_MESSAGE];
+  char buffer[MAX_LENGTH_OF_RFLINK_MESSAGE];
   char next;
   int numCharsRead = 0;
-  while((rflink.available() > 0) && ((next = char(rflink.read())) != '\n') && (numCharsRead < 128))
+
+  while(
+    (rflink.available() > 0) && 
+    (
+      (next = char(rflink.read())) != '\n') && 
+      (numCharsRead < MAX_LENGTH_OF_RFLINK_MESSAGE)
+    )
   {
     buffer[numCharsRead++] = next;
     delay(1);
@@ -81,7 +97,7 @@ void loop() {
 
         int numPairs = 0;
   
-        while((token = strtok(NULL, ";")) && (numPairs < MAX_VALUES))
+        while((token = strtok(NULL, ";")) && (numPairs < MAX_VALUES_IN_RFLINK_MESSAGE))
         {
           nameValuePairs[numPairs++] = token;
         }
@@ -103,6 +119,13 @@ void loop() {
       }
     }
   }
+}
+
+int odd = 0;
+
+void loop() {
+#ifdef RFLINK
+  poll_rflink();
 #endif
 
   digitalWrite (LED_PIN, HIGH);
@@ -110,5 +133,6 @@ void loop() {
   digitalWrite (LED_PIN, LOW);
   delay(1300);
 
-  debug.println(i++);
+  debug.print(odd ? "|" : "-" );
+  odd = !odd;
 }
