@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 SoftwareSerial debug(-1, D1);
+#include <ESP8266WiFi.h>
 #endif
 
 #ifdef ESP01
@@ -17,8 +18,11 @@ HardwareSerial debug = Serial1;
 #define RXD2 16
 #define TXD2 17
 HardwareSerial debug = Serial2;
+#include <WiFi.h>
 #endif
 
+
+#include <PubSubClient.h>
 
 HardwareSerial rflink = Serial;
 
@@ -31,6 +35,9 @@ const char* password = "wookie4701";
  
 const char* mqttServer = "192.168.0.13";
 const int mqttPort = 1883;
+
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
 
 
 void setup() {
@@ -49,6 +56,35 @@ void setup() {
 
   pinMode (LED_PIN, OUTPUT);
   digitalWrite (LED_PIN, LOW);
+
+#ifdef ESP32
+  WiFi.setSleep(false);
+#endif
+
+  int n = WiFi.scanNetworks();
+  debug.print(n);
+  debug.println(" networks found");
+  for(int i = 0; i < n; i++)
+  {
+    debug.println(WiFi.SSID(i));
+  }
+
+  debug.printf("Establishing connection to %s", ssid);
+  
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    debug.print(".");
+    delay(500);
+  }
+  debug.println();
+
+  debug.printf("Connected as %s\n", WiFi.localIP().toString().c_str());
+  debug.println();
+
+
+  mqttClient.setServer(mqttServer, mqttPort);
 }
 
 
@@ -116,6 +152,30 @@ void poll_rflink() {
         json += " }";
 
         debug.println(json.c_str());
+
+        while (!mqttClient.connected()) {
+          debug.println("ESP > Connecting to MQTT...");
+      
+          if (mqttClient.connect("foo")) {
+            debug.println("connected to MQTT server");
+          } else {
+            debug.print("ERROR > failed with state ");
+            debug.print(mqttClient.state());
+            delay(1000);
+      
+          }
+        }
+
+        char topic[100];
+        sprintf(topic, "rflink/%s", device);
+        if(debug.println(mqttClient.publish(topic, json.c_str())))
+        {
+          debug.println("successfully published to '%s'", topic);
+        }
+        else 
+        {
+          debug.println("failed to publish to '%s'", topic);
+        }
       }
     }
   }
@@ -131,8 +191,8 @@ void loop() {
   digitalWrite (LED_PIN, HIGH);
   delay(700);
   digitalWrite (LED_PIN, LOW);
-  delay(1300);
+  delay(300);
 
-  debug.print(odd ? "|" : "-" );
+  debug.print(odd ? "-" : "^" );
   odd = !odd;
 }
