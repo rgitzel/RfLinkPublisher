@@ -93,25 +93,45 @@ const int MAX_VALUES_IN_RFLINK_MESSAGE = 10;
 const int MAX_LENGTH_OF_RFLINK_MESSAGE = 128;
 
 
-void poll_rflink() {
-  char *nameValuePairs[MAX_VALUES_IN_RFLINK_MESSAGE];
-  char buffer[MAX_LENGTH_OF_RFLINK_MESSAGE];
+int read_from_rflink(HardwareSerial rflink, char *buffer, int max_length) {
   char next;
   int numCharsRead = 0;
-
   while(
-    (rflink.available() > 0) && 
-    (
-      (next = char(rflink.read())) != '\n') && 
-      (numCharsRead < MAX_LENGTH_OF_RFLINK_MESSAGE)
-    )
+    (rflink.available() > 0)
+      && ((next = char(rflink.read())) != '\n')
+      && (numCharsRead < max_length)
+  )    
   {
     buffer[numCharsRead++] = next;
     delay(1);
   }
   buffer[numCharsRead] = '\0';
+  return numCharsRead;
+}
 
-  if(numCharsRead > 0)
+bool send_to_mqtt(PubSubClient mqttClient, char *topic, const char *message) {
+  while (!mqttClient.connected()) {
+    debug.println("ESP > Connecting to MQTT...");
+
+    if (mqttClient.connect("foo")) {
+      debug.println("connected to MQTT server");
+    } else {
+      debug.print("ERROR > failed with state ");
+      debug.print(mqttClient.state());
+      delay(1000);
+
+    }
+  }
+
+  return mqttClient.publish(topic, message) == 1;
+}
+
+
+void poll_rflink() {
+  char *nameValuePairs[MAX_VALUES_IN_RFLINK_MESSAGE];
+  char buffer[MAX_LENGTH_OF_RFLINK_MESSAGE];
+
+  if(read_from_rflink(rflink, buffer, MAX_LENGTH_OF_RFLINK_MESSAGE) > 0)
   {
     debug.print('\n');
     debug.print(buffer);
@@ -151,30 +171,21 @@ void poll_rflink() {
 
         json += " }";
 
-        debug.println(json.c_str());
-
-        while (!mqttClient.connected()) {
-          debug.println("ESP > Connecting to MQTT...");
-      
-          if (mqttClient.connect("foo")) {
-            debug.println("connected to MQTT server");
-          } else {
-            debug.print("ERROR > failed with state ");
-            debug.print(mqttClient.state());
-            delay(1000);
-      
-          }
-        }
+        debug.printf("\n%s\n", json.c_str());
 
         char topic[100];
         sprintf(topic, "rflink/%s", device);
-        if(debug.println(mqttClient.publish(topic, json.c_str())))
+
+        if(send_to_mqtt(mqttClient, topic, json.c_str()))
         {
-          debug.println("successfully published to '%s'", topic);
+          debug.printf("successfully published to '%s'", topic);
+          digitalWrite (LED_PIN, LOW);
+          delay(300);
+          digitalWrite (LED_PIN, HIGH);
         }
         else 
         {
-          debug.println("failed to publish to '%s'", topic);
+          debug.printf("failed to publish to '%s'\n", topic);
         }
       }
     }
@@ -188,10 +199,7 @@ void loop() {
   poll_rflink();
 #endif
 
-  digitalWrite (LED_PIN, HIGH);
   delay(700);
-  digitalWrite (LED_PIN, LOW);
-  delay(300);
 
   debug.print(odd ? "-" : "^" );
   odd = !odd;
