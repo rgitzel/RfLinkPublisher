@@ -47,7 +47,7 @@ void setup() {
   
 #ifdef RFLINK
   #ifdef ESP32
-    rflink.begin(57600, SERIAL_8N12, RXD2, TXD2);
+    rflink.begin(57600, SERIAL_8N1, RXD2, TXD2);
   #else
     rflink.begin(57600, SERIAL_8N1);
     rflink.swap();
