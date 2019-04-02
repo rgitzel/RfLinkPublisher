@@ -127,6 +127,77 @@ bool send_to_mqtt(PubSubClient mqttClient, char *topic, const char *message) {
 }
 
 
+typedef struct {
+  char name[100];
+  char value[100];
+} NameValuePair;
+
+bool has_hex_value(char *name) {
+  return !strcmp(name, "TEMP") ||
+         !strcmp(name, "BARO") ||
+         !strcmp(name, "UV") ||
+         !strcmp(name, "LUX") ||
+         !strcmp(name, "RAIN") ||
+         !strcmp(name, "RAINRATE") ||
+         !strcmp(name, "WINSP") ||
+         !strcmp(name, "AWINSP") ||
+         !strcmp(name, "WINGS") ||
+         !strcmp(name, "WINCHL") ||
+         !strcmp(name, "WINTMP") ||
+         !strcmp(name, "KWATT") ||
+         !strcmp(name, "WATT");
+}
+
+bool should_divide_by_10(char *name) {
+  return !strcmp(name, "TEMP") ||
+         !strcmp(name, "RAINRATE") ||
+         !strcmp(name, "WINSP") ||
+         !strcmp(name, "AWINSP");
+}
+
+void to_pairs(char *pairStrings[], NameValuePair *pairs, int numPairs) {
+  for(int i = 0 ; i < numPairs; i++)
+  {
+    char *name = strtok(pairStrings[i], "=");
+    char *value = strtok(NULL, "=");
+
+    strcpy(pairs[i].name, name);
+    
+    if(has_hex_value(name)) {
+      int dec;
+      sscanf(value, "%x", &dec);
+      if(should_divide_by_10(name)) {
+        sprintf(pairs[i].value, "%.1f", dec * 0.1);
+      }
+      else {
+        sprintf(pairs[i].value, "%d", dec);
+      }
+    }
+    else {
+      strcpy(pairs[i].value, value);
+    }
+  }
+}
+
+void pairs_to_json(NameValuePair *pairs, int numPairs, char *jsonString, int max_length) {
+  String buffer;
+
+  for(int i = 0 ; i < numPairs; i++)
+  {
+    if(i > 0)
+      buffer += ",";
+
+    buffer += "\"";
+    buffer += pairs[i].name;
+    buffer += "\":\"";
+    buffer += pairs[i].value;
+    buffer += "\"";
+  }
+
+  strncpy(jsonString, buffer.c_str(), max_length);
+}
+
+
 void poll_rflink() {
   char *nameValuePairs[MAX_VALUES_IN_RFLINK_MESSAGE];
   char buffer[MAX_LENGTH_OF_RFLINK_MESSAGE];
