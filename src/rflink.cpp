@@ -76,45 +76,61 @@ void to_pairs(char *pairStrings[], NameValuePair *pairs, int numPairs) {
   }
 }
 
-bool read_from_rflink(DebugSerial debug, HardwareSerial rflink, RflinkMessage *message) {
-  char buffer[MAX_LENGTH_OF_RFLINK_MESSAGE];
-
-  if(read_from_serial(rflink, buffer, MAX_LENGTH_OF_RFLINK_MESSAGE) > 0)
-  {
-    debug.print('\n');
-    debug.print(buffer);
-    debug.print('\n');
+bool parse_message(DebugSerial debug, char *buffer, RflinkMessage *message) {
+    bool recognized = false;
 
     // skip the first two (they're just counters)
     if(strtok(buffer, ";") && strtok(NULL, ";"))
     {
-      char *device, *id;
+        char *device, *id;
 
-      if((device = strtok(NULL, ";")) && (id = strtok(NULL, ";")))
-      {
-        strcpy(message->device, device);
-        
-        // skip over "ID="
-        strcpy(message->id, id + 3);
-
-        char *token;
-        char *nameValuePairStrings[MAX_VALUES_IN_RFLINK_MESSAGE];
-
-        int numPairs = 0;
-        while((token = strtok(NULL, ";")) && (numPairs < MAX_VALUES_IN_RFLINK_MESSAGE))
+        if((device = strtok(NULL, ";")) && (id = strtok(NULL, ";")))
         {
-          while(isspace(*token)) token++;
-          if(strlen(token) > 0)
-            nameValuePairStrings[numPairs++] = token;
-        }
-        
-        to_pairs(nameValuePairStrings, message->values, numPairs);
-        message->numValues = numPairs;
+            strcpy(message->device, device);
+                
+            // for now assume that first pair will be the ID, and if not
+            //  it's not a message we can process
+            if(!strncmp("ID=", id, 3)) {
+                // skip over "ID="
+                strcpy(message->id, id + 3);
 
+                char *token;
+                char *nameValuePairStrings[MAX_VALUES_IN_RFLINK_MESSAGE];
+
+                int numPairs = 0;
+                while((token = strtok(NULL, ";")) && (numPairs < MAX_VALUES_IN_RFLINK_MESSAGE))
+                {
+                    while(isspace(*token)) token++;
+                    if(strlen(token) > 0)
+                    nameValuePairStrings[numPairs++] = token;
+                }
+                
+                to_pairs(nameValuePairStrings, message->values, numPairs);
+                message->numValues = numPairs;
+
+                recognized = true;
+            }
+        } 
+    }
+
+    return recognized;
+}
+
+bool read_from_rflink(DebugSerial debug, HardwareSerial rflink, RflinkMessage *message) {
+  char buffer[MAX_LENGTH_OF_RFLINK_MESSAGE];
+  
+  if(read_from_serial(rflink, buffer, MAX_LENGTH_OF_RFLINK_MESSAGE) > 0)
+  {
+    debug.printf("\nreceived: '%s'\n", buffer);
+
+    if(parse_message(debug, buffer, message)) {
         return true;
-      } 
+    }
+    else {
+        debug.println("ignoring unrecognized message");    
     }
   }
+
   return false;
 }
 

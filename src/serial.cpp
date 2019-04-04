@@ -8,8 +8,8 @@ int read_from_serial(HardwareSerial hs, char *buffer, int max_length) {
 
   while(
     (hs.available() > 0)
-      && ((next = char(hs.read())) != '\n')
       && (numCharsRead < max_length)
+      && ((next = char(hs.read())) != '\n')
   )    
   {
     buffer[numCharsRead++] = next;
