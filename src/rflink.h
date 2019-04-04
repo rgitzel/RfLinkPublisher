@@ -16,7 +16,7 @@ typedef struct {
 } NameValuePair;
 
 typedef struct {    
-    char device[16];
+    char device[32];
     char id[16];
     NameValuePair values[MAX_VALUES_IN_RFLINK_MESSAGE];
     int numValues;

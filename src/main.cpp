@@ -7,12 +7,10 @@
 #ifdef NODEMCU
 #include <SoftwareSerial.h>
 SoftwareSerial debug(-1, D1);
-#include <ESP8266WiFi.h>
 #endif
 
 #ifdef ESP01
 HardwareSerial debug = Serial1;
-#include <ESP8266WiFi.h>
 #endif
 
 #ifdef ESP32
@@ -20,12 +18,14 @@ HardwareSerial debug = Serial1;
 #define RXD2 16
 #define TXD2 17
 HardwareSerial debug = Serial2;
-#include <WiFi.h>
 #endif
 
 
 #include "publish.h"
 #include "rflink.h"
+#include "wifi.h"
+
+
 
 HardwareSerial rflink = Serial;
 
@@ -39,47 +39,19 @@ PubSubClient mqttClient(espClient);
 
 void setup() {
   debug.begin(9600);
-
   debug.println("starting...");
-  
-#ifdef RFLINK
-  #ifdef ESP32
-    rflink.begin(57600, SERIAL_8N1, RXD2, TXD2);
-  #else
-    rflink.begin(57600, SERIAL_8N1);
-    rflink.swap();
-  #endif
+
+  connect_to_wifi(debug, ssid, password);
+
+#ifdef ESP32
+  rflink.begin(57600, SERIAL_8N1, RXD2);
+#else
+  rflink.begin(57600, SERIAL_8N1);
+  rflink.swap();
 #endif
 
   pinMode (LED_PIN, OUTPUT);
   digitalWrite (LED_PIN, LOW);
-
-#ifdef ESP32
-  WiFi.setSleep(false);
-#endif
-
-  int n = WiFi.scanNetworks();
-  debug.print(n);
-  debug.println(" networks found");
-  for(int i = 0; i < n; i++)
-  {
-    debug.println(WiFi.SSID(i));
-  }
-
-  debug.printf("Establishing connection to %s", ssid);
-  
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    debug.print(".");
-    delay(500);
-  }
-  debug.println();
-
-  debug.printf("Connected as %s\n", WiFi.localIP().toString().c_str());
-  debug.println();
-
 
   mqttClient.setServer(mqttServer, mqttPort);
 }
@@ -129,15 +101,17 @@ void heartbeat() {
 void loop() {
   poll_rflink();
 
+  // don't need to poll like crazy in a super tight loop... even this is probably overkill
   delay(10);
 
   unsigned long now = millis();
   if(now < last_millis) {
-    // the value has overrun, reset it... which will make for a slight burp every 50 days
+    // the value has overrun, so reset it... which will
+    //  make for a slight burp every 50 days or so
     last_millis = now;
   }
   else if(now - last_millis > 1000) {
     heartbeat();
-    last_millis = now;
+    last_millis += 1000;
   }
 }
