@@ -24,4 +24,7 @@ typedef struct {
 
 bool read_from_rflink(DebugSerial debug, HardwareSerial rflink, RflinkMessage *message);
 
+void rflink_message_to_influx(RflinkMessage *message, char *str, int max_length);
+void rflink_message_to_json(RflinkMessage *message, char *jsonString, int max_length);
+
 #endif

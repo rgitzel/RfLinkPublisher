@@ -117,3 +117,52 @@ bool read_from_rflink(DebugSerial debug, HardwareSerial rflink, RflinkMessage *m
   }
   return false;
 }
+
+
+
+void rflink_message_to_json(RflinkMessage *message, char *jsonString, int max_length) {
+  String json = "{\"device\":\"";
+  json += message->device;
+  json += "\",\"device_id\":\"";
+  json += message->id;
+  json += "\",\"data\":{";
+
+  for(int i = 0 ; i < message->numValues; i++)
+  {
+    if(i > 0)
+      json += ",";
+    json += "\"";
+    json += message->values[i].name;
+    json += "\":";
+    json += message->values[i].value;
+  }
+
+  json += "}}";
+
+  strncpy(jsonString, json.c_str(), max_length);
+}
+
+void rflink_message_to_influx(RflinkMessage *message, char *str, int max_length) {
+  // measurement
+  String influx = "rflink";
+
+  // tags
+  influx += ",device=";
+  influx += message->device;
+  influx += ",device_id=";
+  influx += message->id;
+  influx += " ";
+
+  // values
+  for(int i = 0 ; i < message->numValues; i++)
+  {
+    if(i > 0)
+      influx += ",";
+    influx += message->values[i].name;
+    influx += "=";
+    influx += message->values[i].value;
+  }
+
+  strncpy(str, influx.c_str(), max_length);
+}
+

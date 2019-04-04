@@ -91,98 +91,61 @@ void setup() {
 
 
 
-const int MAX_LENGTH_OF_JSON_DOCUMENT = 128;
+const int MAX_LENGTH_OF_OUTPUT_STRING = 128;
 
-
-
-
-void pairs_to_json(RflinkMessage *message, char *jsonString, int max_length) {
-  String json = "{\"device\":\"";
-  json += message->device;
-  json += "\",\"device_id\":\"";
-  json += message->id;
-  json += "\",\"data\":{";
-
-  for(int i = 0 ; i < message->numValues; i++)
-  {
-    if(i > 0)
-      json += ",";
-    json += "\"";
-    json += message->values[i].name;
-    json += "\":";
-    json += message->values[i].value;
-  }
-
-  json += "}}";
-
-  strncpy(jsonString, json.c_str(), max_length);
-}
-
-void pairs_to_influx(RflinkMessage *message, char *str, int max_length) {
-  // measurement
-  String influx = "rflink";
-
-  // tags
-  influx += ",device=";
-  influx += message->device;
-  influx += ",device_id=";
-  influx += message->id;
-  influx += " ";
-
-  // values
-  for(int i = 0 ; i < message->numValues; i++)
-  {
-    if(i > 0)
-      influx += ",";
-    influx += message->values[i].name;
-    influx += "=";
-    influx += message->values[i].value;
-  }
-
-  strncpy(str, influx.c_str(), max_length);
-}
-
+const char* JSON_TOPIC = "foo";
+const char* INFLUX_TOPIC = "influx/input";
 
 void poll_rflink() {
   RflinkMessage message;
 
   if(read_from_rflink(debug, rflink, &message) > 0)
   {
-    char s[MAX_LENGTH_OF_JSON_DOCUMENT];
+    char s[MAX_LENGTH_OF_OUTPUT_STRING];
 
-    pairs_to_json(&message, s, MAX_LENGTH_OF_JSON_DOCUMENT);
-    debug.printf("%s\n", s);
-    if(publish(debug, mqttClient, "foo", s)) {
-      digitalWrite (LED_PIN, LOW);
-      delay(300);
-      digitalWrite (LED_PIN, HIGH);
+    if(JSON_TOPIC) {
+      rflink_message_to_json(&message, s, MAX_LENGTH_OF_OUTPUT_STRING);
+      debug.printf("%s\n", s);
+      if(publish(debug, mqttClient, JSON_TOPIC, s)) {
+        digitalWrite (LED_PIN, LOW);
+        delay(300);
+        digitalWrite (LED_PIN, HIGH);
+      }
     }
 
-    pairs_to_influx(&message, s, MAX_LENGTH_OF_JSON_DOCUMENT);
-    debug.printf("%s\n", s);
-    if(publish(debug, mqttClient, "influx/input", s)) {
-      digitalWrite (LED_PIN, LOW);
-      delay(300);
-      digitalWrite (LED_PIN, HIGH);
+    if(INFLUX_TOPIC) {
+      rflink_message_to_influx(&message, s, MAX_LENGTH_OF_OUTPUT_STRING);
+      debug.printf("%s\n", s);
+      if(publish(debug, mqttClient, INFLUX_TOPIC, s)) {
+        digitalWrite (LED_PIN, LOW);
+        delay(300);
+        digitalWrite (LED_PIN, HIGH);
+      }
     }
   }
 }
 
 
 
-int odd = 0;
-int i = 0;
+
+unsigned long last_millis = millis();
+
+void heartbeat() {
+  debug.print(".");
+}
 
 void loop() {
-#ifdef RFLINK
   poll_rflink();
-#endif
 
   delay(10);
 
-  if(++i % 100 == 0) {
-  debug.print(odd ? "-" : "^" );
-  odd = !odd;
-    i = 0; 
+  unsigned long now = millis();
+  if(now < last_millis) {
+    // the value has overrun, reset it... which will make for a slight burp every 50 days
+    last_millis = now;
+  }
+  else if(now - last_millis > 1000) {
+    heartbeat();
+    last_millis = now;
   }
 }
