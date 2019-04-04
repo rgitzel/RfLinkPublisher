@@ -4,30 +4,33 @@
 #include "settings.h"
 
 
+#include "publish.h"
+#include "rflink.h"
+#include "wifi_lib.h"
+
+
+
+
 #ifdef NODEMCU
 #include <SoftwareSerial.h>
 SoftwareSerial debug(-1, D1);
+HardwareSerial rflink = Serial;
+#define LED_ON LOW
 #endif
 
 #ifdef ESP01
 HardwareSerial debug = Serial1;
+HardwareSerial rflink = Serial;
+#define LED_ON LOW
 #endif
 
 #ifdef ESP32
-// https://circuits4you.com/2018/12/31/esp32-hardware-debug2-example/
-#define RXD2 16
-#define TXD2 17
-HardwareSerial debug = Serial2;
+// it seems you can't mix these with 'Serial' objects, they 
+//  tend to override each other (e.g. using the same baud rate)
+HardwareSerial debug(0);
+HardwareSerial rflink(2);
+#define LED_ON HIGH
 #endif
-
-
-#include "publish.h"
-#include "rflink.h"
-#include "wifi.h"
-
-
-
-HardwareSerial rflink = Serial;
 
 
 
@@ -38,20 +41,20 @@ PubSubClient mqttClient(espClient);
 
 
 void setup() {
+#ifdef ESP32
+  debug.begin(9600, SERIAL_8N1, -1, TX);
+  rflink.begin(57600, SERIAL_8N1, 16);
+#else
   debug.begin(9600);
+  rflink.begin(57600, SERIAL_8N1);
+  rflink.swap();
+#endif
   debug.println("starting...");
 
   connect_to_wifi(debug, ssid, password);
 
-#ifdef ESP32
-  rflink.begin(57600, SERIAL_8N1, RXD2);
-#else
-  rflink.begin(57600, SERIAL_8N1);
-  rflink.swap();
-#endif
-
   pinMode (LED_PIN, OUTPUT);
-  digitalWrite (LED_PIN, LOW);
+  digitalWrite (LED_PIN, !LED_ON);
 
   mqttClient.setServer(mqttServer, mqttPort);
 }
@@ -71,9 +74,9 @@ void poll_rflink() {
       rflink_message_to_json(&message, s, MAX_LENGTH_OF_OUTPUT_STRING);
       debug.printf("%s\n", s);
       if(publish(debug, mqttClient, jsonTopic, s)) {
-        digitalWrite (LED_PIN, LOW);
+        digitalWrite (LED_PIN, LED_ON);
         delay(300);
-        digitalWrite (LED_PIN, HIGH);
+        digitalWrite (LED_PIN, !LED_ON);
       }
     }
 
@@ -81,9 +84,9 @@ void poll_rflink() {
       rflink_message_to_influx(&message, s, MAX_LENGTH_OF_OUTPUT_STRING);
       debug.printf("%s\n", s);
       if(publish(debug, mqttClient, influxTopic, s)) {
-        digitalWrite (LED_PIN, LOW);
+        digitalWrite (LED_PIN, LED_ON);
         delay(300);
-        digitalWrite (LED_PIN, HIGH);
+        digitalWrite (LED_PIN, !LED_ON);
       }
     }
   }
