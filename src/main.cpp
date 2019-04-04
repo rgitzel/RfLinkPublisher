@@ -1,16 +1,17 @@
 
 #define RFLINK 
 
-#ifdef NODEMCU
 #include <Arduino.h>
+
+#ifdef NODEMCU
 #include <SoftwareSerial.h>
 SoftwareSerial debug(-1, D1);
 #include <ESP8266WiFi.h>
 #endif
 
 #ifdef ESP01
-#include <Arduino.h>
 HardwareSerial debug = Serial1;
+#include <ESP8266WiFi.h>
 #endif
 
 #ifdef ESP32
@@ -22,7 +23,8 @@ HardwareSerial debug = Serial2;
 #endif
 
 
-#include <PubSubClient.h>
+#include "publish.h"
+#include "rflink.h"
 
 HardwareSerial rflink = Serial;
 
@@ -89,139 +91,26 @@ void setup() {
 
 
 
-const int MAX_VALUES_IN_RFLINK_MESSAGE = 10;
-const int MAX_LENGTH_OF_RFLINK_MESSAGE = 64;
 const int MAX_LENGTH_OF_JSON_DOCUMENT = 128;
 
-int read_from_serial(HardwareSerial hs, char *buffer, int max_length) {
-  char next;
-  int numCharsRead = 0;
-
-  while(
-    (hs.available() > 0)
-      && ((next = char(hs.read())) != '\n')
-      && (numCharsRead < max_length)
-  )    
-  {
-    buffer[numCharsRead++] = next;
-    delay(1);
-  }
-  buffer[numCharsRead] = '\0';
-
-  return numCharsRead;
-}
-
-bool send_to_mqtt(PubSubClient mqttClient, const char *topic, const char *message) {
-  while (!mqttClient.connected()) {
-    debug.println("ESP > Connecting to MQTT...");
-
-    if (mqttClient.connect("foo")) {
-      debug.println("connected to MQTT server");
-    } else {
-      debug.print("ERROR > failed with state ");
-      debug.print(mqttClient.state());
-      delay(1000);
-
-    }
-  }
-
-  return mqttClient.publish(topic, message) == 1;
-}
 
 
-typedef struct {
-  char name[16];
-  char value[16];
-} NameValuePair;
 
-bool has_hex_value(char *name) {
-  return !strcmp(name, "TEMP") ||
-         !strcmp(name, "BARO") ||
-         !strcmp(name, "UV") ||
-         !strcmp(name, "LUX") ||
-         !strcmp(name, "RAIN") ||
-         !strcmp(name, "RAINRATE") ||
-         !strcmp(name, "WINSP") ||
-         !strcmp(name, "AWINSP") ||
-         !strcmp(name, "WINGS") ||
-         !strcmp(name, "WINCHL") ||
-         !strcmp(name, "WINTMP") ||
-         !strcmp(name, "KWATT") ||
-         !strcmp(name, "WATT");
-}
-
-bool should_divide_by_10(char *name) {
-  return !strcmp(name, "TEMP") ||
-         !strcmp(name, "RAINRATE") ||
-         !strcmp(name, "WINSP") ||
-         !strcmp(name, "AWINSP");
-}
-
-bool has_integer_value(char *name) {
-  return !strcmp(name, "BFORECAST") ||
-         !strcmp(name, "CHIME") ||
-         !strcmp(name, "CO2") ||
-         !strcmp(name, "CURRENT") ||
-         !strcmp(name, "CURRENT2") ||
-         !strcmp(name, "CURRENT3") ||
-         !strcmp(name, "DIST") ||
-         !strcmp(name, "HSTATUS") ||
-         !strcmp(name, "HUM") ||
-         !strcmp(name, "METER") ||
-         !strcmp(name, "SET_LEVEL") ||
-         !strcmp(name, "SOUND") ||
-         !strcmp(name, "VOLT") ||
-         !strcmp(name, "WINDDIR");
-}
-
-void to_pairs(char *pairStrings[], NameValuePair *pairs, int numPairs) {
-  for(int i = 0 ; i < numPairs; i++)
-  {
-    char *name = strtok(pairStrings[i], "=");
-    char *value = strtok(NULL, "=");
-
-    size_t j;
-    for(j = 0; j < strlen(name) && j < 15; j++) {
-      pairs[i].name[j] = tolower(name[j]);
-    }
-    pairs[i].name[j] = '\0';
-    
-    if(has_hex_value(name)) {
-      int n;
-      sscanf(value, "%x", &n);
-      if(should_divide_by_10(name)) {
-        sprintf(pairs[i].value, "%.1f", n * 0.1);
-      }
-      else {
-        sprintf(pairs[i].value, "%d", n);
-      }
-    }
-    else if(has_integer_value(name)) {
-      int n;
-      sscanf(value, "%d", &n);
-      sprintf(pairs[i].value, "%d", n);
-    }
-    else {
-      sprintf(pairs[i].value, "\"%s\"", value);
-    }
-  }
-}
-
-void pairs_to_json(char *device, char *id, NameValuePair *pairs, int numPairs, char *jsonString, int max_length) {
+void pairs_to_json(RflinkMessage *message, char *jsonString, int max_length) {
   String json = "{\"device\":\"";
-  json += device;
+  json += message->device;
   json += "\",\"device_id\":\"";
-  json += id;
+  json += message->id;
   json += "\",\"data\":{";
 
-  for(int i = 0 ; i < numPairs; i++)
+  for(int i = 0 ; i < message->numValues; i++)
   {
     if(i > 0)
       json += ",";
     json += "\"";
-    json += pairs[i].name;
+    json += message->values[i].name;
     json += "\":";
-    json += pairs[i].value;
+    json += message->values[i].value;
   }
 
   json += "}}";
@@ -229,89 +118,52 @@ void pairs_to_json(char *device, char *id, NameValuePair *pairs, int numPairs, c
   strncpy(jsonString, json.c_str(), max_length);
 }
 
-void pairs_to_influx(char *device, char *id, NameValuePair *pairs, int numPairs, char *str, int max_length) {
+void pairs_to_influx(RflinkMessage *message, char *str, int max_length) {
   // measurement
   String influx = "rflink";
 
   // tags
   influx += ",device=";
-  influx += device;
+  influx += message->device;
   influx += ",device_id=";
-  influx += id;
+  influx += message->id;
   influx += " ";
 
   // values
-  for(int i = 0 ; i < numPairs; i++)
+  for(int i = 0 ; i < message->numValues; i++)
   {
     if(i > 0)
       influx += ",";
-    influx += pairs[i].name;
+    influx += message->values[i].name;
     influx += "=";
-    influx += pairs[i].value;
+    influx += message->values[i].value;
   }
 
   strncpy(str, influx.c_str(), max_length);
 }
 
 
-void publish(PubSubClient mqtt_server, const char *topic, const char *message) {
-  if(send_to_mqtt(mqttClient, topic, message))
-  {
-    debug.printf("successfully published to '%s'\n", topic);
-    digitalWrite (LED_PIN, LOW);
-    delay(300);
-    digitalWrite (LED_PIN, HIGH);
-  }
-  else
-  {
-    debug.printf("failed to publish to '%s'\n", topic);
-  }        
-}
-
 void poll_rflink() {
-  char buffer[MAX_LENGTH_OF_RFLINK_MESSAGE];
+  RflinkMessage message;
 
-  if(read_from_serial(rflink, buffer, MAX_LENGTH_OF_RFLINK_MESSAGE) > 0)
+  if(read_from_rflink(debug, rflink, &message) > 0)
   {
-    debug.print('\n');
-    debug.print(buffer);
-    debug.print('\n');
+    char s[MAX_LENGTH_OF_JSON_DOCUMENT];
 
-    // skip the first two (they're just counters)
-    if(strtok(buffer, ";") && strtok(NULL, ";"))
-    {
-      char *device, *id;
+    pairs_to_json(&message, s, MAX_LENGTH_OF_JSON_DOCUMENT);
+    debug.printf("%s\n", s);
+    if(publish(debug, mqttClient, "foo", s)) {
+      digitalWrite (LED_PIN, LOW);
+      delay(300);
+      digitalWrite (LED_PIN, HIGH);
+    }
 
-      if((device = strtok(NULL, ";")) && (id = strtok(NULL, ";")))
-      {
-        // skip over "ID="
-        id = id + 3;
-
-        char *token;
-        char *nameValuePairStrings[MAX_VALUES_IN_RFLINK_MESSAGE];
-        NameValuePair nameValuePairs[MAX_VALUES_IN_RFLINK_MESSAGE];
-
-        int numPairs = 0;
-        while((token = strtok(NULL, ";")) && (numPairs < MAX_VALUES_IN_RFLINK_MESSAGE))
-        {
-          while(isspace(*token)) token++;
-          if(strlen(token) > 0)
-            nameValuePairStrings[numPairs++] = token;
-        }
-
-        to_pairs(nameValuePairStrings, nameValuePairs, numPairs);
-
-        char s[MAX_LENGTH_OF_JSON_DOCUMENT];
-
-        pairs_to_json(device, id, nameValuePairs, numPairs, s, MAX_LENGTH_OF_JSON_DOCUMENT);
-        debug.printf("%s\n", s);
-        publish(mqttClient, "foo", s);
-
-        pairs_to_influx(device, id, nameValuePairs, numPairs, s, MAX_LENGTH_OF_JSON_DOCUMENT);
-        debug.printf("%s\n", s);
-        publish(mqttClient, "influx/input", s);
-
-      } 
+    pairs_to_influx(&message, s, MAX_LENGTH_OF_JSON_DOCUMENT);
+    debug.printf("%s\n", s);
+    if(publish(debug, mqttClient, "influx/input", s)) {
+      digitalWrite (LED_PIN, LOW);
+      delay(300);
+      digitalWrite (LED_PIN, HIGH);
     }
   }
 }
