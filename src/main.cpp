@@ -1,7 +1,8 @@
 
-#define RFLINK 
-
 #include <Arduino.h>
+
+#include "settings.h"
+
 
 #ifdef NODEMCU
 #include <SoftwareSerial.h>
@@ -31,12 +32,6 @@ HardwareSerial rflink = Serial;
 
 
 #define LED_PIN 2
-
-const char* ssid = "KOBEAR-2G";
-const char* password = "wookie4701";
- 
-const char* mqttServer = "192.168.0.13";
-const int mqttPort = 1883;
 
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
@@ -93,9 +88,6 @@ void setup() {
 
 const int MAX_LENGTH_OF_OUTPUT_STRING = 128;
 
-const char* JSON_TOPIC = "foo";
-const char* INFLUX_TOPIC = "influx/input";
-
 void poll_rflink() {
   RflinkMessage message;
 
@@ -103,20 +95,20 @@ void poll_rflink() {
   {
     char s[MAX_LENGTH_OF_OUTPUT_STRING];
 
-    if(JSON_TOPIC) {
+    if(jsonTopic) {
       rflink_message_to_json(&message, s, MAX_LENGTH_OF_OUTPUT_STRING);
       debug.printf("%s\n", s);
-      if(publish(debug, mqttClient, JSON_TOPIC, s)) {
+      if(publish(debug, mqttClient, jsonTopic, s)) {
         digitalWrite (LED_PIN, LOW);
         delay(300);
         digitalWrite (LED_PIN, HIGH);
       }
     }
 
-    if(INFLUX_TOPIC) {
+    if(influxTopic) {
       rflink_message_to_influx(&message, s, MAX_LENGTH_OF_OUTPUT_STRING);
       debug.printf("%s\n", s);
-      if(publish(debug, mqttClient, INFLUX_TOPIC, s)) {
+      if(publish(debug, mqttClient, influxTopic, s)) {
         digitalWrite (LED_PIN, LOW);
         delay(300);
         digitalWrite (LED_PIN, HIGH);

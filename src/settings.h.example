@@ -1,0 +1,19 @@
+
+/*
+ * DON'T CHANGE THIS FILE
+ * 
+ * instead copy this file as "settings.h" and set the values there (and remove this header if you like)
+ *
+ *  "settings.h" should be ignored by Git, so you won't accidentally share your settings...
+ */
+
+const char* ssid = "MYSSID";
+const char* password = "F00BAR2342";
+ 
+const char* mqttServer = "my_server.home";
+const int mqttPort = 1883;
+
+// set these to the names of the MQTT topics that should be published to,
+//  or just to 'null' if you don't want messages in that format
+const char* jsonTopic = null;
+const char* influxTopic = "influx/input";
