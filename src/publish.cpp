@@ -1,33 +1,39 @@
 
-#include <publish.h>
+#include "publish.h"
 
 
-bool send_to_mqtt(DebugSerial debug, PubSubClient mqttClient, const char *topic, const char *message) {
-  while (!mqttClient.connected()) {
-    debug.println("ESP > Connecting to MQTT...");
+MqttPublisher::MqttPublisher(DebugSerial *debug, const char *server, int port) {
+  _debug = debug;
+  _server = server;
+  _port = port;
+}
 
-    if (mqttClient.connect("foo")) {
-      debug.println("connected to MQTT server");
+void MqttPublisher::startup() {
+  _wifi = new WiFiClient;
+  _client = new PubSubClient(*_wifi);
+  _client->setServer(_server, _port);
+  _connect();
+}
+
+
+void MqttPublisher::_connect() {
+  _debug->println("Connecting to MQTT...");
+  while (!_client->connected()) {
+    if (_client->connect("foo")) {
+      _debug->printf("connected to MQTT server '%s'\n", _server);
     } else {
-      debug.print("ERROR > failed with state ");
-      debug.print(mqttClient.state());
+      _debug->printf("ERROR > failed with state '%d'\n", _client->state());
       delay(1000);
-
     }
   }
-
-  return mqttClient.publish(topic, message) == 1;
 }
 
-bool publish(DebugSerial debug, PubSubClient mqttClient, const char *topic, const char *message) {
-  if(send_to_mqtt(debug, mqttClient, topic, message))
-  {
-    debug.printf("successfully published to '%s'\n", topic);
+bool MqttPublisher::publish(const char *topic, const char *message) {
+  _connect();
+  if(_client->publish(topic, message)) {
+    _debug->printf("successfully published to '%s'\n", topic);
     return true;
   }
-  
-  debug.printf("failed to publish to '%s'\n", topic);
-  
+  _debug-> printf("failed to publish to '%s'\n", topic);
   return false;
 }
-

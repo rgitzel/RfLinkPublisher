@@ -3,9 +3,9 @@
 
 #include "settings.h"
 
-
+#include "led.h"
 #include "publish.h"
-#include "rflink.h"
+#include "rflink_reader.h"
 #include "wifi_lib.h"
 
 
@@ -15,13 +15,16 @@
 #include <SoftwareSerial.h>
 SoftwareSerial debug(-1, D1);
 HardwareSerial rflink = Serial;
-#define LED_ON LOW
+// internal blue LED
+#define LED_PIN 2
 #endif
 
 #ifdef ESP01
-HardwareSerial debug = Serial1;
+#include <SoftwareSerial.h>
+SoftwareSerial debug(-1, 0);
 HardwareSerial rflink = Serial;
-#define LED_ON LOW
+// external LED (internal blue one is shared with TX)
+#define LED_PIN 2
 #endif
 
 #ifdef ESP32
@@ -29,16 +32,16 @@ HardwareSerial rflink = Serial;
 //  tend to override each other (e.g. using the same baud rate)
 HardwareSerial debug(0);
 HardwareSerial rflink(2);
-#define LED_ON HIGH
+#define LED_PIN 2
 #endif
 
 
 
-#define LED_PIN 2
 
-WiFiClient espClient;
-PubSubClient mqttClient(espClient);
 
+Led led(LED_PIN);
+RfLinkReader reader(&debug);
+MqttPublisher publisher(&debug, mqttServer, mqttPort);
 
 void setup() {
 #ifdef ESP32
@@ -49,14 +52,16 @@ void setup() {
   rflink.begin(57600, SERIAL_8N1);
   rflink.swap();
 #endif
+  
   debug.println("starting...");
 
-  connect_to_wifi(debug, ssid, password);
+  led.startup();
 
-  pinMode (LED_PIN, OUTPUT);
-  digitalWrite (LED_PIN, !LED_ON);
+  connect_to_wifi(&debug, ssid, password);
 
-  mqttClient.setServer(mqttServer, mqttPort);
+  publisher.startup();
+
+  reader.startup(&rflink);
 }
 
 
@@ -64,29 +69,25 @@ void setup() {
 const int MAX_LENGTH_OF_OUTPUT_STRING = 128;
 
 void poll_rflink() {
-  RflinkMessage message;
+  RfLinkMessage message;
 
-  if(read_from_rflink(debug, rflink, &message) > 0)
+  if(reader.read(&message) > 0)
   {
     char s[MAX_LENGTH_OF_OUTPUT_STRING];
 
     if(jsonTopic) {
-      rflink_message_to_json(&message, s, MAX_LENGTH_OF_OUTPUT_STRING);
+      message.to_json(s, MAX_LENGTH_OF_OUTPUT_STRING);
       debug.printf("%s\n", s);
-      if(publish(debug, mqttClient, jsonTopic, s)) {
-        digitalWrite (LED_PIN, LED_ON);
-        delay(300);
-        digitalWrite (LED_PIN, !LED_ON);
+      if(publisher.publish(jsonTopic, s)) {
+        led.blink(300);
       }
     }
 
     if(influxTopic) {
-      rflink_message_to_influx(&message, s, MAX_LENGTH_OF_OUTPUT_STRING);
+      message.to_influx(s, MAX_LENGTH_OF_OUTPUT_STRING);
       debug.printf("%s\n", s);
-      if(publish(debug, mqttClient, influxTopic, s)) {
-        digitalWrite (LED_PIN, LED_ON);
-        delay(300);
-        digitalWrite (LED_PIN, !LED_ON);
+      if(publisher.publish(influxTopic, s)) {
+        led.blink(300);
       }
     }
   }
@@ -99,6 +100,7 @@ unsigned long last_millis = millis();
 
 void heartbeat() {
   debug.print(".");
+  led.blink(100);
 }
 
 void loop() {

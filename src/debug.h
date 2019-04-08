@@ -18,7 +18,15 @@
 #ifdef NODEMCU
 #include <SoftwareSerial.h>
 typedef SoftwareSerial DebugSerial;
-#else
+#endif
+
+#ifdef ESP01
+#include <SoftwareSerial.h>
+typedef SoftwareSerial DebugSerial;
+#endif
+
+
+#ifdef ESP32
 typedef HardwareSerial DebugSerial;
 #endif
 
