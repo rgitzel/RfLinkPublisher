@@ -108,6 +108,16 @@ void RfLinkMessage::to_influx(char *str, int max_length) {
   influx += _device;
   influx += ",device_id=";
   influx += _id;
+  influx += ",processor=";
+#ifdef ESP01
+  influx += "ESP-01";
+#endif
+#ifdef ESP32
+  influx += "ESP32";
+#endif
+#ifdef NODEMCU
+  influx += "NodeMCU";
+#endif
   influx += " ";
 
   // values
