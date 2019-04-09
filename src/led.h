@@ -11,7 +11,7 @@ class Led {
     public:
         Led(int pin, int on_value);
         
-        void startup();
+        void setup();
         
         void on();
         void off();

@@ -4,7 +4,8 @@
 #include "settings.h"
 
 #include "led.h"
-#include "publish.h"
+#include "mqtt-publisher.h"
+#include "pulse.h"
 #include "rflink_reader.h"
 #include "wifi_lib.h"
 
@@ -36,7 +37,7 @@ Led led(2, HIGH);
 
 
 
-
+Pulse pulse(&debug, &led, 500);
 RfLinkReader reader(&debug);
 MqttPublisher publisher(&debug, mqttServer, mqttPort);
 
@@ -61,15 +62,15 @@ void setup() {
   
   debug.println("starting...");
 
-  led.startup();
+  led.setup();
 
   connect_to_wifi(&debug, ssid, password);
 
-  publisher.startup();
+  publisher.setup();
 
-  reader.startup(&rflink);
+  reader.setup(&rflink);
 
-  last_millis = millis();
+  pulse.setup();
 }
 
 
@@ -104,25 +105,11 @@ void poll_rflink() {
 
 
 
-void heartbeat() {
-  debug.print(".");
-  led.blink(100);
-}
-
 void loop() {
   poll_rflink();
 
   // don't need to poll like crazy in a super tight loop... even this is probably overkill
   delay(10);
 
-  unsigned long now = millis();
-  if(now < last_millis) {
-    // the value has overrun, so reset it... which will
-    //  make for a slight burp every 50 days or so
-    last_millis = now;
-  }
-  else if(now - last_millis > 1000) {
-    heartbeat();
-    last_millis += 1000;
-  }
+  pulse.loop();
 }

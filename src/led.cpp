@@ -9,7 +9,7 @@ Led::Led(int pin, int on_value) {
     _on = on_value;
 }
 
-void Led::startup() {
+void Led::setup() {
     pinMode(_pin, OUTPUT);
     off();
 }

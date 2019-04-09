@@ -9,7 +9,7 @@ RfLinkReader::RfLinkReader(DebugSerial *debug) {
   _debug = debug;
 }
 
-void RfLinkReader::startup(HardwareSerial *rflink) {
+void RfLinkReader::setup(HardwareSerial *rflink) {
   _rflink = rflink;
 }
 

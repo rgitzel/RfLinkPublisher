@@ -18,7 +18,7 @@ class RfLinkReader {
   public:
     RfLinkReader(DebugSerial *debug);
     
-    void startup(HardwareSerial *rflink);
+    void setup(HardwareSerial *rflink);
 
     bool read(RfLinkMessage *message);
 };
