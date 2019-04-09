@@ -9,7 +9,7 @@ class Led {
         int _on;
 
     public:
-        Led(int pin);
+        Led(int pin, int on_value);
         
         void startup();
         

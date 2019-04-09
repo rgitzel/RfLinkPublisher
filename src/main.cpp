@@ -9,22 +9,20 @@
 #include "wifi_lib.h"
 
 
-
-
 #ifdef NODEMCU
 #include <SoftwareSerial.h>
 SoftwareSerial debug(-1, D1);
 HardwareSerial rflink = Serial;
 // internal blue LED
-#define LED_PIN 2
+Led led(2, LOW);
 #endif
 
 #ifdef ESP01
 #include <SoftwareSerial.h>
 SoftwareSerial debug(-1, 0);
-HardwareSerial rflink = Serial;
-// external LED (internal blue one is shared with TX)
-#define LED_PIN 2
+HardwareSerial rflink(0);
+// internal blue LED on GPIO1 (shared with TX)
+Led led(1, LOW);
 #endif
 
 #ifdef ESP32
@@ -32,16 +30,18 @@ HardwareSerial rflink = Serial;
 //  tend to override each other (e.g. using the same baud rate)
 HardwareSerial debug(0);
 HardwareSerial rflink(2);
-#define LED_PIN 2
+Led led(2, HIGH);
 #endif
 
 
 
 
 
-Led led(LED_PIN);
 RfLinkReader reader(&debug);
 MqttPublisher publisher(&debug, mqttServer, mqttPort);
+
+unsigned long last_millis;
+
 
 void setup() {
 #ifdef ESP32
@@ -49,8 +49,14 @@ void setup() {
   rflink.begin(57600, SERIAL_8N1, 16);
 #else
   debug.begin(9600);
-  rflink.begin(57600, SERIAL_8N1);
+#ifdef NODEMCU
+  rflink.begin(57600, SERIAL_8N1, SERIAL_RX_ONLY);
   rflink.swap();
+#else
+  rflink.begin(57600, SERIAL_8N1, SERIAL_RX_ONLY);
+  // RX seems to default to being a GPIO pin :(
+  pinMode(3, FUNCTION_0);
+#endif
 #endif
   
   debug.println("starting...");
@@ -62,6 +68,8 @@ void setup() {
   publisher.startup();
 
   reader.startup(&rflink);
+
+  last_millis = millis();
 }
 
 
@@ -95,8 +103,6 @@ void poll_rflink() {
 
 
 
-
-unsigned long last_millis = millis();
 
 void heartbeat() {
   debug.print(".");

@@ -2,14 +2,15 @@
 #include "serial.h"
 
 
-int read_from_serial(HardwareSerial hs, char *buffer, int max_length) {
+int read_from_serial(HardwareSerial *hs, char *buffer, int max_length) {
   char next;
   int numCharsRead = 0;
 
   while(
-    (hs.available() > 0)
+    (hs->available() > 0)
       && (numCharsRead < max_length)
-      && ((next = char(hs.read())) != '\n')
+      // && ((next = char(hs->read())) != '\n')
+      && ((next = char(hs->read())))
   )    
   {
     buffer[numCharsRead++] = next;

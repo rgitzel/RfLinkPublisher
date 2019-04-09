@@ -5,6 +5,6 @@
 #include <Arduino.h>
 
 
-int read_from_serial(HardwareSerial hs, char *buffer, int max_length);
+int read_from_serial(HardwareSerial *hs, char *buffer, int max_length);
 
 #endif

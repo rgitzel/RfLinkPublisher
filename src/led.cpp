@@ -4,20 +4,9 @@
 #include "led.h"
 
 
-Led::Led(int pin) {
+Led::Led(int pin, int on_value) {
     _pin = pin;
-
-#ifdef NODEMCU
-    _on = LOW;
-#endif
-
-#ifdef ESP01
-    _on = HIGH;
-#endif
-
-#ifdef ESP32
-    _on = HIGH;
-#endif
+    _on = on_value;
 }
 
 void Led::startup() {

@@ -9,20 +9,20 @@ MqttPublisher::MqttPublisher(DebugSerial *debug, const char *server, int port) {
 }
 
 void MqttPublisher::startup() {
+  // we have to explicitly keep this around, or PubSubClient will fail mysteriously
   _wifi = new WiFiClient;
   _client = new PubSubClient(*_wifi);
   _client->setServer(_server, _port);
   _connect();
 }
 
-
 void MqttPublisher::_connect() {
-  _debug->println("Connecting to MQTT...");
   while (!_client->connected()) {
+    _debug->println("Connecting to MQTT...");
     if (_client->connect("foo")) {
       _debug->printf("connected to MQTT server '%s'\n", _server);
     } else {
-      _debug->printf("ERROR > failed with state '%d'\n", _client->state());
+      _debug->printf("ERROR: connecting to MQTT failed with '%d'\n", _client->state());
       delay(1000);
     }
   }
