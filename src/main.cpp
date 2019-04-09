@@ -1,164 +1,128 @@
+
 #include <Arduino.h>
 
-#include <WiFi.h>
- 
-#include <PubSubClient.h>
+#include "settings.h"
+
+#include "led.h"
+#include "publish.h"
+#include "rflink_reader.h"
+#include "wifi_lib.h"
+
+
+#ifdef NODEMCU
+#include <SoftwareSerial.h>
+SoftwareSerial debug(-1, D1);
+HardwareSerial rflink = Serial;
+// internal blue LED
+Led led(2, LOW);
+#endif
+
+#ifdef ESP01
+#include <SoftwareSerial.h>
+SoftwareSerial debug(-1, 0);
+HardwareSerial rflink(0);
+// internal blue LED on GPIO1 (shared with TX)
+Led led(1, LOW);
+#endif
+
+#ifdef ESP32
+// it seems you can't mix these with 'Serial' objects, they 
+//  tend to override each other (e.g. using the same baud rate)
+HardwareSerial debug(0);
+HardwareSerial rflink(2);
+Led led(2, HIGH);
+#endif
 
 
 
-HardwareSerial monitor = Serial;
-HardwareSerial rflink = Serial2;
 
 
-// https://circuits4you.com/2018/12/31/esp32-hardware-monitor2-example/
-#define RXD2 16
-#define TXD2 17
+RfLinkReader reader(&debug);
+MqttPublisher publisher(&debug, mqttServer, mqttPort);
 
-#define LED_PIN 2
+unsigned long last_millis;
 
-const char* ssid = "KOBEAR-2G";
-const char* password = "wookie4701";
- 
-const char* mqttServer = "192.168.0.13";
-const int mqttPort = 1883;
-
-WiFiClient espClient;
-PubSubClient client(espClient);
 
 void setup() {
-  monitor.begin(9600);
+#ifdef ESP32
+  debug.begin(9600, SERIAL_8N1, -1, TX);
+  rflink.begin(57600, SERIAL_8N1, 16);
+#else
+  debug.begin(9600);
+#ifdef NODEMCU
+  rflink.begin(57600, SERIAL_8N1, SERIAL_RX_ONLY);
+  rflink.swap();
+#else
+  rflink.begin(57600, SERIAL_8N1, SERIAL_RX_ONLY);
+  // RX seems to default to being a GPIO pin :(
+  pinMode(3, FUNCTION_0);
+#endif
+#endif
+  
+  debug.println("starting...");
 
-  monitor.printf("Establishing connection to %s", ssid);
+  led.startup();
 
-  // took a long time to find that this is critical for the ESP32
+  connect_to_wifi(&debug, ssid, password);
 
-  WiFi.setSleep(false);
+  publisher.startup();
 
-  int n = WiFi.scanNetworks();
-  monitor.print(n);
-  monitor.println(" networks found");
-  for(int i = 0; i < n; i++)
-  {
-    monitor.println(WiFi.SSID(i));
-  }
+  reader.startup(&rflink);
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    monitor.print(".");
-    delay(500);
-  }
-  monitor.println();
-
-  monitor.print("Connected as ");
-  monitor.print(WiFi.localIP());
-  monitor.println();
-
-
-  client.setServer(mqttServer, mqttPort);
-
-
-  rflink.begin(57600, SERIAL_8N1, RXD2, TXD2);
-
-  pinMode (LED_PIN, OUTPUT);
-  digitalWrite (LED_PIN, LOW);
+  last_millis = millis();
 }
 
 
 
-const int MAX_VALUES = 10;
-char *nameValuePairs[MAX_VALUES];
+const int MAX_LENGTH_OF_OUTPUT_STRING = 128;
 
-char buffer[128];
+void poll_rflink() {
+  RfLinkMessage message;
 
-void loop() {
-
-  char next;
-  int numCharsRead = 0;
-  while((rflink.available() > 0) && ((next = char(rflink.read())) != '\n') && (numCharsRead < 128))
+  if(reader.read(&message) > 0)
   {
-    buffer[numCharsRead++] = next;
-    delay(1);
-  }
-  buffer[numCharsRead] = '\0';
+    char s[MAX_LENGTH_OF_OUTPUT_STRING];
 
-  if(numCharsRead > 0)
-  {
-    monitor.print('\n');
-    monitor.print(buffer);
-    monitor.print('\n');
-
-    // skip the first two (they're just counters)
-    if(strtok(buffer, ";") && strtok(NULL, ";"))
-    {
-      char *device;
-      char *token;
-      char buffer[100];
-
-      String json = "";
-
-      if((device = strtok(NULL, ";")))
-      {
-        sprintf(buffer, "{ \"device\": \"%s\"", device);
-        json += buffer;
-
-        int numPairs = 0;
-  
-        while((token = strtok(NULL, ";")) && (numPairs < MAX_VALUES))
-        {
-          nameValuePairs[numPairs++] = token;
-        }
-
-        for(int i = 0 ; i < numPairs; i++)
-        {
-          char *name = strtok(nameValuePairs[i], "=");
-          char *value = strtok(NULL, "=");
-          if(name && value)
-          {
-            sprintf(buffer, ", \"%s\": \"%s\"", name, value);
-            json += buffer;
-          }
-        }
-
-        json += " }";
-
-        monitor.println(json.c_str());
-
-        while (!client.connected()) {
-          monitor.println("ESP > Connecting to MQTT...");
-      
-          if (client.connect("foo")) {
-            monitor.println("connected to MQTT server");
-          } else {
-            monitor.print("ERROR > failed with state ");
-            monitor.print(client.state());
-            delay(2000);
-      
-          }
-        }
-
-        char topic[100];
-        sprintf(topic, "rflink/%s", device);
-        if(monitor.println(client.publish(topic, json.c_str())))
-        {
-          monitor.println("successfully published to MQTT server");
-        }
-        else 
-        {
-          monitor.println("failed to publish to MQTT server");
-        }
+    if(jsonTopic) {
+      message.to_json(s, MAX_LENGTH_OF_OUTPUT_STRING);
+      debug.printf("%s\n", s);
+      if(publisher.publish(jsonTopic, s)) {
+        led.blink(300);
       }
     }
-    
-    digitalWrite (LED_PIN, HIGH);
-    delay(300);
-    digitalWrite (LED_PIN, LOW);
-  }
-  else {
-    delay(300);
-  }
 
-  delay(700);
-  monitor.print(".");
+    if(influxTopic) {
+      message.to_influx(s, MAX_LENGTH_OF_OUTPUT_STRING);
+      debug.printf("%s\n", s);
+      if(publisher.publish(influxTopic, s)) {
+        led.blink(300);
+      }
+    }
+  }
+}
+
+
+
+
+void heartbeat() {
+  debug.print(".");
+  led.blink(100);
+}
+
+void loop() {
+  poll_rflink();
+
+  // don't need to poll like crazy in a super tight loop... even this is probably overkill
+  delay(10);
+
+  unsigned long now = millis();
+  if(now < last_millis) {
+    // the value has overrun, so reset it... which will
+    //  make for a slight burp every 50 days or so
+    last_millis = now;
+  }
+  else if(now - last_millis > 1000) {
+    heartbeat();
+    last_millis += 1000;
+  }
 }
