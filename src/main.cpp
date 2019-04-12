@@ -4,112 +4,82 @@
 #include "settings.h"
 
 #include "led.h"
-#include "mqtt-publisher.h"
+// #include "mqtt-publisher.h"
 #include "pulse.h"
-#include "rflink_reader.h"
-#include "wifi_lib.h"
+// #include "wifi_lib.h"
 
+#include <EmonLib.h>
 
-#ifdef NODEMCU
-#include <SoftwareSerial.h>
-SoftwareSerial debug(-1, D1);
-HardwareSerial rflink = Serial;
-// internal blue LED
-Led led(2, LOW);
-#endif
+EnergyMonitor emon;
 
-#ifdef ESP01
-#include <SoftwareSerial.h>
-SoftwareSerial debug(-1, 0);
-HardwareSerial rflink(0);
-// internal blue LED on GPIO1 (shared with TX)
-Led led(1, LOW);
-#endif
-
-#ifdef ESP32
-// it seems you can't mix these with 'Serial' objects, they 
-//  tend to override each other (e.g. using the same baud rate)
 HardwareSerial debug(0);
-HardwareSerial rflink(2);
+
 Led led(2, HIGH);
-#endif
 
+Pulse pulse(&debug, &led, 1000);
 
+// MqttPublisher publisher(&debug, mqttServer, mqttPort);
 
+const int pin1 = A0;
 
-Pulse pulse(&debug, &led, 500);
-RfLinkReader reader(&debug);
-MqttPublisher publisher(&debug, mqttServer, mqttPort);
-
-unsigned long last_millis;
-
+#define EMON 0
 
 void setup() {
-#ifdef ESP32
   debug.begin(9600, SERIAL_8N1, -1, TX);
-  rflink.begin(57600, SERIAL_8N1, 16);
-#else
-  debug.begin(9600);
-#ifdef NODEMCU
-  rflink.begin(57600, SERIAL_8N1, SERIAL_RX_ONLY);
-  rflink.swap();
-#else
-  rflink.begin(57600, SERIAL_8N1, SERIAL_RX_ONLY);
-  // RX seems to default to being a GPIO pin :(
-  pinMode(3, FUNCTION_0);
-#endif
-#endif
   
   debug.println("starting...");
 
   led.setup();
-
-  connect_to_wifi(&debug, ssid, password);
-
-  publisher.setup();
-
-  reader.setup(&rflink);
-
   pulse.setup();
+
+  // connect_to_wifi(&debug, ssid, password);
+  // publisher.setup();
+
+#if EMON
+  emon.current(A0, 30);
+  analogSetAttenuation(ADC_6db);
+#else
+  // emon sets this to 10?
+  analogReadResolution(12);
+
+  analogSetAttenuation(ADC_11db);
+
+  adcAttachPin(pin1);
+  adcStart(pin1);
+#endif
 }
 
 
 
-const int MAX_LENGTH_OF_OUTPUT_STRING = 128;
+void poll_ct() {
+#if EMON
+  debug.printf("%f\n", emon.calcIrms(1480));
+#else
+  double acc = 0;
+  double acc2 = 0;
+  
+  const int N = 40000;
 
-void poll_rflink() {
-  RfLinkMessage message;
-
-  if(reader.read(&message) > 0)
-  {
-    char s[MAX_LENGTH_OF_OUTPUT_STRING];
-
-    if(jsonTopic) {
-      message.to_json(s, MAX_LENGTH_OF_OUTPUT_STRING);
-      debug.printf("%s\n", s);
-      if(publisher.publish(jsonTopic, s)) {
-        led.blink(300);
-      }
-    }
-
-    if(influxTopic) {
-      message.to_influx(s, MAX_LENGTH_OF_OUTPUT_STRING);
-      debug.printf("%s\n", s);
-      if(publisher.publish(influxTopic, s)) {
-        led.blink(300);
-      }
-    }
+  for(int i = 0 ; i < N; i++) {
+    int reading = analogRead(pin1) - 1675.0;
+    acc += reading;
+    acc2 += (reading * reading);
   }
+  debug.printf("%.1f %.1f %.1f %.1f\n", 
+    acc / N, 
+    sqrt(acc2/N), 
+    sqrt(acc2/N) * 9.7 / 270.0, 
+    sqrt(acc2/N) * 12.6 / 380.0);
+#endif
 }
 
 
 
 
 void loop() {
-  poll_rflink();
+  poll_ct();
 
-  // don't need to poll like crazy in a super tight loop... even this is probably overkill
-  delay(10);
+  // delay(177);
 
-  pulse.loop();
+  // pulse.loop();
 }
