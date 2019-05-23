@@ -37,7 +37,7 @@ Led led(2, HIGH);
 
 
 
-Pulse pulse(&debug, &led, 500);
+Pulse pulse(&debug, &led, 500, '.');
 RfLinkReader reader(&debug);
 MqttPublisher publisher(&debug, mqttServer, mqttPort);
 
