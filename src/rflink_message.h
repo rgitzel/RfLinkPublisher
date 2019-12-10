@@ -15,6 +15,7 @@ typedef struct {
 
 class RfLinkMessage {
   protected:
+    char _original[MAX_LENGTH_OF_RFLINK_MESSAGE];
     char _device[32];
     char _id[16];
     NameValuePair _values[MAX_VALUES_IN_RFLINK_MESSAGE];

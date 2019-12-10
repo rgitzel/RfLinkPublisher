@@ -4,6 +4,15 @@
 RfLinkMessage::RfLinkMessage() {
 }
 
+/*
+ * examples:
+ *    20;5F;Acurite;ID=ca2a;WINSP=0000;WINDIR=0015;RAIN=021d;BAT=OK;
+ *    20;5E;Acurite;ID=ca2a;TEMP=002d;HUM=99;WINSP=0000;BAT=OK;
+ *    20;60;Tunex;ID=A902;TEMP=00bf;HUM=61;BAT=OK;
+ *    20;40;Doorbell;ID=1538;SWITCH=1;CMD=ON;CHIME=01;
+ *    20;3F;Bosch;ID=7f7f;SWITCH=2;CMD=07;
+ *    20;67;Eurodomest;ID=0137c4;SWITCH=06;CMD=ALLON;
+ */
 void RfLinkMessage::to_pairs(char *pairStrings[], NameValuePair *pairs, int numPairs) {
   for(int i = 0 ; i < numPairs; i++)
   {
@@ -39,6 +48,8 @@ void RfLinkMessage::to_pairs(char *pairStrings[], NameValuePair *pairs, int numP
 
 bool RfLinkMessage::from_string(char *rflink_message, RfLinkMessage *message) {
     bool recognized = false;
+
+    strncpy(message->_original, rflink_message, MAX_LENGTH_OF_RFLINK_MESSAGE);
 
     // skip the first two (they're just counters)
     if(strtok(rflink_message, ";") && strtok(NULL, ";"))
@@ -121,10 +132,12 @@ void RfLinkMessage::to_influx(char *str, int max_length) {
   influx += " ";
 
   // values
+  influx += "source=\"";
+  influx += _original;
+  influx += "\"";
   for(int i = 0 ; i < _numValues; i++)
   {
-    if(i > 0)
-      influx += ",";
+    influx += ",";
     influx += _values[i].name;
     influx += "=";
     influx += _values[i].value;

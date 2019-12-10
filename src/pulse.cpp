@@ -17,7 +17,7 @@ void Pulse::setup() {
 
 void Pulse::_beat() {
   if(_ch)
-    _debug->print(".");
+    _debug->print(_ch);
   _led->blink(50);
 }
 

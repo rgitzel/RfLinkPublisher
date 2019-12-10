@@ -9,14 +9,17 @@ int read_from_serial(HardwareSerial *hs, char *buffer, int max_length) {
   while(
     (hs->available() > 0)
       && (numCharsRead < max_length)
-      // && ((next = char(hs->read())) != '\n')
       && ((next = char(hs->read())))
+      && (next != '\n')
   )    
   {
     buffer[numCharsRead++] = next;
     delay(1);
   }
-  buffer[numCharsRead] = '\0';
+  if(numCharsRead > 0)
+    buffer[numCharsRead-1] = '\0';
+  else
+    buffer[0] = '\0';
 
   return numCharsRead;
 }

@@ -20,6 +20,7 @@ Led led(2, LOW);
 
 #ifdef ESP01
 #include <SoftwareSerial.h>
+// debug will be on GPIO0, not on TX!
 SoftwareSerial debug(-1, 0);
 HardwareSerial rflink(0);
 // internal blue LED on GPIO1 (shared with TX)
@@ -37,7 +38,8 @@ Led led(2, HIGH);
 
 
 
-Pulse pulse(&debug, &led, 500, '.');
+Pulse pulse(&debug, &led, 1000, 'x');
+
 RfLinkReader reader(&debug);
 MqttPublisher publisher(&debug, mqttServer, mqttPort);
 
@@ -75,13 +77,15 @@ void setup() {
 
 
 
-const int MAX_LENGTH_OF_OUTPUT_STRING = 128;
+const int MAX_LENGTH_OF_OUTPUT_STRING = 256;
 
 void poll_rflink() {
   RfLinkMessage message;
 
   if(reader.read(&message) > 0)
   {
+    debug.printf("got message\n");
+
     char s[MAX_LENGTH_OF_OUTPUT_STRING];
 
     if(jsonTopic) {
@@ -109,7 +113,7 @@ void loop() {
   poll_rflink();
 
   // don't need to poll like crazy in a super tight loop... even this is probably overkill
-  delay(10);
+  delay(100);
 
   pulse.loop();
 }

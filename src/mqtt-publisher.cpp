@@ -30,7 +30,7 @@ void MqttPublisher::_connect() {
 
 bool MqttPublisher::publish(const char *topic, const char *message) {
   _connect();
-  if(_client->publish(topic, message)) {
+  if(_client->publish_P(topic, message, false)) {
     _debug->printf("successfully published to '%s'\n", topic);
     return true;
   }
