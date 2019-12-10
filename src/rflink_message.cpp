@@ -110,6 +110,23 @@ void RfLinkMessage::to_json(char *jsonString, int max_length) {
   strncpy(jsonString, json.c_str(), max_length);
 }
 
+// build a line containing one or more values, all tagged with 
+//  where they came from
+//
+// TODO: is this the best approach?  Perhaps should do one line per
+//  value, and make the 'measurement' more specific?  As is, we
+//  get a table with a lot of different columns
+// Or maybe it's okay, this is just a dump into Influx, and we
+//  should use Kapacitor to use that to build (and re-build)
+//  the "real" data streams.  Hmmm, yeah, so if there are errors
+//  (e.g. the negative temperatures I wasn't handling properly),
+//  the can fix it in the Kapacitor script, and rebuild the whole
+//  measurement
+// which also has me wondering if the original string shouldn't be
+//  included as a value, here
+// in which case... why interpret it, here?  just get it into Influx
+//  and let Kapacitor decide what each string means?
+//
 void RfLinkMessage::to_influx(char *str, int max_length) {
   // measurement
   String influx = "rflink";
